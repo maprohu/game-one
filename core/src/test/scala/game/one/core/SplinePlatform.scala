@@ -30,7 +30,7 @@ object SplinePlatform {
       true
     )
 
-    val points = Range(0, segmentCount)
+    val points = (Range(0, segmentCount) :+ 0)
       .map(_.toFloat / segmentCount)
       .map({ t =>
         val v = new Vector2()
