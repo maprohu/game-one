@@ -27,12 +27,22 @@ object RunGameOne {
   val logicProvider = {
     //    val level = FlatPlatform.provider(50)
     val playerProvider = SingleWheel.provider
-    val level = RandomLinePlatform.provider(
-      Params(
+
+//    val level = RandomLinePlatform.provider(
+//      Params(
+//        100,
+//        SingleWheel.wheelRadius * 2,
+//        SingleWheel.wheelRadius * 5,
+//        SingleWheel.wheelRadius * 2
+//      )
+//    )
+
+    val level = SplinePlatform.provider(
+      SplinePlatform.Params(
+        10,
         100,
-        SingleWheel.wheelRadius * 2,
-        SingleWheel.wheelRadius * 5,
-        SingleWheel.wheelRadius * 2
+        SingleWheel.wheelRadius * 50,
+        SingleWheel.wheelRadius * 50
       )
     )
 
