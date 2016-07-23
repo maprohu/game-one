@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.{GL20, OrthographicCamera}
 import com.badlogic.gdx.math.{Matrix4, Vector2}
 import com.badlogic.gdx.physics.box2d.BodyDef.BodyType
 import com.badlogic.gdx.physics.box2d._
+import com.badlogic.gdx.physics.box2d.joints.{RevoluteJoint, RevoluteJointDef}
 import com.badlogic.gdx.utils.Timer
 import com.badlogic.gdx.utils.Timer.Task
 
@@ -45,15 +46,17 @@ object Params {
 
   val frameRate = 1/60f
 
-  val screenWidth = 10
+  val largeWheelRadius = 1
+  val smallWheelRadius = 0.1f
 
-  val largeWheelRadius = screenWidth / 10
+  val axisDistance = largeWheelRadius * 2
 
-  val axis
-
-  val wheelOrigin = new Vector2(0, 0)
+  val largeWheelOrigin = new Vector2(0, 0)
+  val smallWheelOrigin = new Vector2(largeWheelOrigin.x, largeWheelOrigin.y + axisDistance)
 
   val groundWidth = 50
+
+  val screenWidth = 10
 
 }
 
@@ -67,10 +70,33 @@ class Logic {
   val world = {
     val world = new World(new Vector2(0, -10), true)
 
-    {
+    val smallWheel = {
       val bodyDef = new BodyDef()
       bodyDef.`type` = BodyType.DynamicBody
-      bodyDef.position.set(wheelOrigin)
+      bodyDef.position.set(smallWheelOrigin)
+
+      val body = world.createBody(bodyDef)
+
+      val circle = new CircleShape()
+      circle.setRadius(smallWheelRadius);
+
+      val fixtureDef = new FixtureDef()
+      fixtureDef.shape = circle
+      fixtureDef.density = 0.5f
+      fixtureDef.friction = 0.4f
+      fixtureDef.restitution = 0.6f
+
+      val fixture = body.createFixture(fixtureDef)
+
+      circle.dispose()
+
+      body
+    }
+
+    val largeWheel = {
+      val bodyDef = new BodyDef()
+      bodyDef.`type` = BodyType.DynamicBody
+      bodyDef.position.set(largeWheelOrigin)
 
       val body = world.createBody(bodyDef)
 
@@ -86,27 +112,50 @@ class Logic {
       val fixture = body.createFixture(fixtureDef)
 
       circle.dispose()
+
+      body
+    }
+
+    val chassis = {
+      val bodyDef = new BodyDef()
+      bodyDef.`type` = BodyType.DynamicBody
+      bodyDef.position.set(largeWheelOrigin)
+
+      val body = world.createBody(bodyDef)
+
+      val circle = new PolygonShape()
+      circle.setAsBox(
+        smallWheelRadius / 2,
+        axisDistance / 2,
+        new Vector2(0, axisDistance / 2 ),
+        0
+      )
+
+      circle.setRadius(largeWheelRadius);
+
+      val fixtureDef = new FixtureDef()
+      fixtureDef.shape = circle
+      fixtureDef.density = 0.5f
+      fixtureDef.friction = 0.4f
+      fixtureDef.restitution = 0.6f
+
+      val fixture = body.createFixture(fixtureDef)
+
+      circle.dispose()
+
+      body
     }
 
     {
-      val bodyDef = new BodyDef()
-      bodyDef.`type` = BodyType.DynamicBody
-      bodyDef.position.set(wheelOrigin)
+      val jointDef = new RevoluteJointDef
+      jointDef.initialize(largeWheel, chassis, largeWheelOrigin)
+      world.createJoint(jointDef)
+    }
 
-      val body = world.createBody(bodyDef)
-
-      val circle = new CircleShape()
-      circle.setRadius(largeWheelRadius);
-
-      val fixtureDef = new FixtureDef()
-      fixtureDef.shape = circle
-      fixtureDef.density = 0.5f
-      fixtureDef.friction = 0.4f
-      fixtureDef.restitution = 0.6f
-
-      val fixture = body.createFixture(fixtureDef)
-
-      circle.dispose()
+    {
+      val jointDef = new RevoluteJointDef
+      jointDef.initialize(smallWheel, chassis, smallWheelOrigin)
+      world.createJoint(jointDef)
     }
 
     {
@@ -129,7 +178,6 @@ class Logic {
       new Task {
         override def run(): Unit = {
           world.step(frameRate, 6, 2)
-          println("step")
         }
       },
       frameRate,
@@ -142,7 +190,6 @@ class Logic {
     Gdx.gl.glClearColor( 0, 0, 0, 1 )
     Gdx.gl.glClear( GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT )
     debugRenderer.render(world, camera.combined)
-    println("render")
   }
 
   def resize(width: Int, height: Int): Unit = {
