@@ -8,6 +8,7 @@ import com.github.davidmoten.rtree.{Entry, RTree}
 import com.github.davidmoten.rtree.geometry.{Geometry, Line, Point, Rectangle}
 import game.one.core.GameOne.Level
 import game.one.core.SplineTunnelPlatform.Params
+import rx.functions.Func2
 
 import scala.collection.JavaConversions._
 
@@ -232,21 +233,21 @@ object SplineTunnelPlatform {
       ) + d
     )
 
-    def isInside(point: Point) : Boolean = {
+    def isInside(x: Float, y: Float) : Boolean = {
       Line2D.ptSegDistSq(
         line.x1(),
         line.y1(),
         line.x2(),
         line.y2(),
-        point.x(),
-        point.y()
+        x,
+        y
       ) < d*d
     }
 
     override def distance(r: Rectangle): Double = ???
 
     override def intersects(r: Rectangle): Boolean = {
-      line.distance(r) < d
+      (line.distance(r) < d).asInstanceOf[Boolean]
     }
 
     override def mbr(): Rectangle = rectangle
@@ -484,8 +485,18 @@ class SplineLevel(params: Params, world: World, start: Start) {
           )
         )
 
+    val cutterIntersectsLine = new Func2[Cutter, Line, java.lang.Boolean] {
+      override def call(t1: Cutter, t2: Line): java.lang.Boolean = {
+        t1.isInside(t2.x1(), t2.y1()) ||
+          t1.isInside(t2.x2(), t2.y2())
+      }
+    }
+
     def shouldCut(edge: Edge) = {
-      cutterTree.search(edge.line).toBlocking.toIterable
+      cutterTree.search(
+        edge.line,
+        cutterIntersectsLine
+      ).toBlocking.toIterable
         .exists(c => !edge.cutters.contains(c))
     }
 
@@ -493,14 +504,16 @@ class SplineLevel(params: Params, world: World, start: Start) {
       val (_, left) = edges.span({ edge =>
         shouldCut(edge)
       })
-      edges.span({ edge =>
+      left.span({ edge =>
         !shouldCut(edge)
       })
     }
 
     Stream.iterate((Seq.empty[Edge], refinedEdges))(a => removeCut(a._2))
+      .drop(1)
       .map(_._1)
       .takeWhile(_.nonEmpty)
+      .toList
       .foreach(drawEdges)
 
   }
