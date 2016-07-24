@@ -35,178 +35,20 @@ object SplineTunnelPlatform {
 
   def provider(params: Params) : Level = { (world, start) =>
     new SplineLevel(params, world, start)
-
-
-
-
-//    val (points1, points2) =
-//      (e1s :+ e1s.head)
-//        .flatMap({ i =>
-//          import i._
-//          Seq(
-//            (e1p1, e2p1),
-//            (e1p2, e2p2)
-//          )
-//        })
-//        .unzip
-//
-//    def nonSelfIntersectingSegments(ps: Seq[Vertex]) : Seq[Seq[Vertex]] = {
-//
-//      val lines =
-//        ps
-//          .sliding(2)
-//          .collect({
-//            case Seq(p1, p2) =>
-//              Edge(
-//                p1, p2
-//              )
-//          }).toIterable
-//
-//
-//      val tree =
-//        RTree
-//          .create[Edge, Line]()
-//          .add(
-//            asJavaIterable(
-//              lines.map({ edge =>
-//                Entry.entry(edge, edge.line)
-//              })
-//            )
-//          )
-//
-//      val pointTree =
-//        RTree
-//          .create[Vertex, Point]()
-//          .add(
-//            asJavaIterable(
-//              lines.flatMap({ edge =>
-//                Seq(
-//                  Entry.entry(edge.p1, edge.p1.point),
-//                  Entry.entry(edge.p2, edge.p2.point)
-//                )
-//              })
-//            )
-//          )
-//
-//      def selfIntersects(line: Edge) : Boolean = {
-//        tree.search(line.line).toBlocking.toIterable
-//          .filterNot({ entry =>
-//            val found = entry.value()
-//
-//            (found.p1 eq line.p1) ||
-//            (found.p1 eq line.p2) ||
-//            (found.p2 eq line.p1) ||
-//            (found.p2 eq line.p2)
-//          })
-//          .nonEmpty
-//      }
-//
-//      val lineDistance : Func2[Line, Line, java.lang.Double] = new Func2[Line, Line, java.lang.Double] {
-//        override def call(t1: Line, t2: Line): Double = {
-//          if (t1.intersects(t2)) 0
-//          else {
-//            Math.sqrt(
-//              Seq(
-//                Line2D.ptSegDistSq(
-//                  t1.x1(), t1.y1(),
-//                  t1.x2(), t1.y2(),
-//                  t2.x1(), t2.y1()
-//                ),
-//                Line2D.ptSegDistSq(
-//                  t1.x1(), t1.y1(),
-//                  t1.x2(), t1.y2(),
-//                  t2.x2(), t2.y2()
-//                ),
-//                Line2D.ptSegDistSq(
-//                  t2.x1(), t2.y1(),
-//                  t2.x2(), t2.y2(),
-//                  t1.x1(), t1.y1()
-//                ),
-//                Line2D.ptSegDistSq(
-//                  t2.x1(), t2.y1(),
-//                  t2.x2(), t2.y2(),
-//                  t1.x2(), t1.y2()
-//                )
-//              ).reduce((a,b) => Math.min(a,b))
-//            )
-//          }
-//        }
-//      }
-//
-//      val pointLineDistance : Func2[Point, Line, java.lang.Double] = new Func2[Point, Line, java.lang.Double] {
-//        override def call(t1: Point, t2: Line): Double = {
-//          Line2D.ptLineDist(t2.x1(), t2.y1(), t2.x2(), t2.y2(), t1.x(), t1.y())
-//        }
-//      }
-//
-//      val innerPoints =
-//        e1s.foldLeft(Set.empty[Vertex])({ (ps, e) =>
-//          val line = e.middleEdge.line
-//
-//          ps ++
-//            pointTree.search(
-//              line,
-//              e.d.toDouble,
-//              pointLineDistance
-//            ).toBlocking.toIterable
-//              .filterNot({ entry =>
-//
-//                val found = entry.value()
-//
-//                (found eq e.e1p1) ||
-//                  (found eq e.e1p2) ||
-//                  (found eq e.e2p1) ||
-//                  (found eq e.e2p2)
-//              })
-//              .map(_.value())
-//        })
-//
-//      val (nonIntersect, headIntersect) = lines.span({ line =>
-//        !selfIntersects(line)
-//      })
-//
-//      val reorg =
-//        (headIntersect ++ nonIntersect).tail
-//
-//      val segs = reorg.foldLeft(Seq(Seq(reorg.head.p1)))({ (segs, line) =>
-//
-//        if (selfIntersects(line)) {
-//          Seq(line.p2) +: segs
-//        } else {
-//          (line.p2 +: segs.head) +: segs.tail
-//        }
-//
-//      })
-//    }
-
-//
-//
-//
-//    def draw(lines: Seq[Seq[Vector2]]) = {
-//      lines match {
-//        case s @ Seq(single) =>
-//          Platforms.chain(world, filter(single)(identity).toArray)
-//        case _ =>
-//          lines
-//            .map(seg => filter(seg)(identity))
-//            .filter(_.size >= 2)
-//            .foreach({ seg =>
-//              Platforms.chain(world, seg.toArray)
-//            })
-//      }
-//    }
-//
-//    def processPoints(points: Seq[Vector2]) = {
-//      draw(nonSelfIntersectingSegments(points))
-//    }
-//
-//    processPoints(points1)
-//    processPoints(points2)
-//
-//
-
-
   }
+
+  def test : Level = { (world, start) =>
+    performCut(
+      Seq(
+        new Vector2(-1, 0),
+        new Vector2(1, 0),
+        new Vector2(0, 1)
+      ).map(v => (v.add(start.origin), 0.2f)),
+      _ => 1f,
+      edgeDrawer(world)
+    )
+  }
+
 
   // TODO: different cutter for each side
   class Cutter(
@@ -278,6 +120,216 @@ object SplineTunnelPlatform {
     edges: Seq[Edge]
   )
 
+  def performCut(points: Seq[(Vector2, Float)], dist: Float => Float, drawEdges: Seq[Edge] => Unit) = {
+
+    val (sc1, sc2) =
+      (points :+ points.head)
+        .sliding(2)
+        .collect({
+          case Seq((p1, t), (p2, _)) =>
+            val n =
+              new Vector2(p2)
+                .sub(p1)
+                .nor()
+                .rotate90(1)
+
+            val ml = Line.create(p1.x, p1.y, p2.x, p2.y)
+            val d = dist(t)
+            val cutter = new Cutter(ml, d)
+
+            (
+              (
+                cutter,
+                Edge(
+                  Vertex(new Vector2(p1).mulAdd(n, d), cutter),
+                  Vertex(new Vector2(p2).mulAdd(n, d), cutter)
+                )
+                ),
+              (
+                cutter,
+                Edge(
+                  Vertex(new Vector2(p1).mulAdd(n, -d), cutter),
+                  Vertex(new Vector2(p2).mulAdd(n, -d), cutter)
+                )
+                )
+              )
+
+        })
+        .toSeq
+        .unzip
+
+    val (c1s, e1s) = sc1.unzip
+    val (c2s, e2s) = sc2.unzip
+
+    val halves = Seq(
+      Half(c1s.toList, e1s.toList),
+      Half(c2s.toList, e2s.toList)
+    )
+
+    halves.foreach { half =>
+      import half._
+
+
+      val edgeTree =
+        RTree
+          .create[Edge, Line]()
+          .add(
+            asJavaIterable(
+              edges.map({ edge =>
+                Entry.entry(edge, edge.line)
+              })
+            )
+          )
+
+      val refinedEdges = edges.flatMap({ edge =>
+        val edgeCuts = edge.cutters
+
+        val realCutters = edgeTree.search(edge.line).toBlocking.toIterable
+          .filterNot({ entry =>
+            val found = entry.value()
+
+            (found eq edge) ||
+              (found.p1 eq edge.p2) ||
+              (found.p2 eq edge.p1)
+          })
+          .flatMap({ cuttingEdge =>
+            val is = new Vector2()
+            if (Intersector.intersectSegments(
+              edge.line.x1(),
+              edge.line.y1(),
+              edge.line.x2(),
+              edge.line.y2(),
+              cuttingEdge.geometry().x1(),
+              cuttingEdge.geometry().y1(),
+              cuttingEdge.geometry().x2(),
+              cuttingEdge.geometry().y2(),
+              is
+            )) {
+              Some((is.dst2(edge.p1.v), is, cuttingEdge.value()))
+            } else {
+              None
+            }
+          })
+          .toSeq
+          .sortBy(_._1)
+
+        if (realCutters.isEmpty) {
+          Seq(edge)
+        } else {
+          val (lastVertex, cutEdges) = realCutters
+            .foldLeft((edge.p1, Seq.empty[Edge]))({ (acc, item) =>
+              val (p1, items) = acc
+              val (_, p2, cutterEdge) = item
+
+              val vertex = new Vertex(
+                p2,
+                edgeCuts ++ cutterEdge.cutters
+              )
+
+              val edge = Edge(
+                p1,
+                vertex
+              )
+
+              (
+                vertex,
+                items :+ edge
+                )
+            })
+
+          cutEdges :+ Edge(lastVertex, edge.p2)
+        }
+
+
+      })
+
+      val cutterTree =
+        RTree
+          .create[Cutter, Cutter]()
+          .add(
+            asJavaIterable(
+              cutters.map({ cutter =>
+                Entry.entry(cutter, cutter)
+              })
+            )
+          )
+
+      val cutterIntersectsLine = new Func2[Cutter, Line, java.lang.Boolean] {
+        override def call(t1: Cutter, t2: Line): java.lang.Boolean = {
+          t1.isInside(t2.x1(), t2.y1()) ||
+            t1.isInside(t2.x2(), t2.y2())
+        }
+      }
+
+      def shouldCut(edge: Edge) = {
+        cutterTree.search(
+          edge.line,
+          cutterIntersectsLine
+        ).toBlocking.toIterable
+          .exists(c => !edge.cutters.contains(c))
+      }
+
+      def removeCut(edges: Seq[Edge]) : (Seq[Edge], Seq[Edge]) = {
+        val (_, left) = edges.span({ edge =>
+          shouldCut(edge)
+        })
+        left.span({ edge =>
+          !shouldCut(edge)
+        })
+      }
+
+//      Stream.iterate((Seq.empty[Edge], refinedEdges))(a => removeCut(a._2))
+//        .drop(1)
+//        .map(_._1)
+//        .takeWhile(_.nonEmpty)
+//        .toList
+//        .foreach(drawEdges)
+
+      drawEdges(refinedEdges)
+    }
+  }
+
+  def edgeDrawer(world: World) = {
+
+    def filter[T](items: Seq[T])(fn: T => Vector2) = {
+      items match {
+        case head +: tail =>
+          tail.foldLeft(Seq(head))({ (seq, item) =>
+            val h = fn(seq.head)
+            val v = fn(item)
+
+            if (isTooClose(h, v)) {
+              seq
+            } else {
+              item +: seq
+            }
+          }).reverse
+        case _ => items
+      }
+    }
+
+    def drawChainOrLoop(points: Seq[Vector2]) : Unit = {
+      val filtered = filter(points)(identity)
+      if (filtered.size <= 1) return
+      if (isTooClose(filtered.head, filtered.last)) {
+        Platforms.loop(world, filtered.tail.toArray)
+      } else {
+        Platforms.chain(world, filtered.toArray)
+      }
+    }
+
+    def drawVertices(vertices: Seq[Vertex]) = {
+      drawChainOrLoop(vertices.map(_.v))
+    }
+
+    def drawEdges(edges: Seq[Edge]) = {
+      edges.headOption.foreach { head =>
+        drawVertices(head.p1 +: edges.tail.map(_.p2))
+      }
+    }
+
+    drawEdges _
+  }
 }
 
 class SplineLevel(params: Params, world: World, start: Start) {
@@ -285,43 +337,6 @@ class SplineLevel(params: Params, world: World, start: Start) {
 
   import params._
 
-  def filter[T](items: Seq[T])(fn: T => Vector2) = {
-    items match {
-      case head +: tail =>
-        tail.foldLeft(Seq(head))({ (seq, item) =>
-          val h = fn(seq.head)
-          val v = fn(item)
-
-          if (isTooClose(h, v)) {
-            seq
-          } else {
-            item +: seq
-          }
-        }).reverse
-      case _ => items
-    }
-  }
-
-  def drawChainOrLoop(points: Seq[Vector2]) : Unit = {
-    val filtered = filter(points)(identity)
-    if (filtered.size <= 1) return
-    if (isTooClose(filtered.head, filtered.last)) {
-      Platforms.loop(world, filtered.tail.toArray)
-    } else {
-      Platforms.chain(world, filtered.toArray)
-    }
-  }
-
-  def drawVertices(vertices: Seq[Vertex]) = {
-    drawChainOrLoop(vertices.map(_.v))
-  }
-
-  def drawEdges(edges: Seq[Edge]) = {
-    edges.headOption.foreach { head =>
-      drawVertices(head.p1 +: edges.tail.map(_.p2))
-    }
-
-  }
 
   val controlPoints = Stream.continually(
     new Vector2(
@@ -352,169 +367,6 @@ class SplineLevel(params: Params, world: World, start: Start) {
       (v, t)
     })
 
+  performCut(points, dist, edgeDrawer(world))
 
-  val (sc1, sc2) =
-    (points :+ points.head)
-      .sliding(2)
-      .collect({
-        case Seq((p1, t), (p2, _)) =>
-          val n =
-            new Vector2(p2)
-              .sub(p1)
-              .nor()
-              .rotate90(1)
-
-          val ml = Line.create(p1.x, p1.y, p2.x, p2.y)
-          val d = dist(t)
-          val cutter = new Cutter(ml, d)
-
-          (
-            (
-              cutter,
-              Edge(
-                Vertex(new Vector2(p1).mulAdd(n, d), cutter),
-                Vertex(new Vector2(p2).mulAdd(n, d), cutter)
-              )
-              ),
-            (
-              cutter,
-              Edge(
-                Vertex(new Vector2(p1).mulAdd(n, -d), cutter),
-                Vertex(new Vector2(p2).mulAdd(n, -d), cutter)
-              )
-              )
-            )
-
-      })
-      .toSeq
-      .unzip
-
-  val (c1s, e1s) = sc1.unzip
-  val (c2s, e2s) = sc2.unzip
-
-  val halves = Seq(
-    Half(c1s, e1s),
-    Half(c2s, e2s)
-  )
-
-  halves.foreach { half =>
-    import half._
-
-
-    val edgeTree =
-      RTree
-        .create[Edge, Line]()
-        .add(
-          asJavaIterable(
-            edges.map({ edge =>
-              Entry.entry(edge, edge.line)
-            })
-          )
-        )
-
-    val refinedEdges = edges.flatMap({ edge =>
-      val edgeCuts = edge.cutters
-
-      val realCutters = edgeTree.search(edge.line).toBlocking.toIterable
-        .filterNot({ entry =>
-          val found = entry.value()
-
-          (found eq edge) ||
-            (found.p1 eq edge.p2) ||
-            (found.p2 eq edge.p1)
-        })
-        .flatMap({ cuttingEdge =>
-          val is = new Vector2()
-          if (Intersector.intersectSegments(
-            edge.line.x1(),
-            edge.line.y1(),
-            edge.line.x2(),
-            edge.line.y2(),
-            cuttingEdge.geometry().x1(),
-            cuttingEdge.geometry().y1(),
-            cuttingEdge.geometry().x2(),
-            cuttingEdge.geometry().y2(),
-            is
-          )) {
-            Some((is.dst2(edge.p1.v), is, cuttingEdge.value()))
-          } else {
-            None
-          }
-        })
-        .toSeq
-        .sortBy(_._1)
-
-      if (realCutters.isEmpty) {
-        Seq(edge)
-      } else {
-        val (lastVertex, cutEdges) = realCutters
-          .foldLeft((edge.p1, Seq.empty[Edge]))({ (acc, item) =>
-            val (p1, items) = acc
-            val (_, p2, cutterEdge) = item
-
-            val vertex = new Vertex(
-              p2,
-              edgeCuts ++ cutterEdge.cutters
-            )
-
-            val edge = Edge(
-              p1,
-              vertex
-            )
-
-            (
-              vertex,
-              items :+ edge
-              )
-          })
-
-        cutEdges :+ Edge(lastVertex, edge.p2)
-      }
-
-
-    })
-
-    val cutterTree =
-      RTree
-        .create[Cutter, Cutter]()
-        .add(
-          asJavaIterable(
-            cutters.map({ cutter =>
-              Entry.entry(cutter, cutter)
-            })
-          )
-        )
-
-    val cutterIntersectsLine = new Func2[Cutter, Line, java.lang.Boolean] {
-      override def call(t1: Cutter, t2: Line): java.lang.Boolean = {
-        t1.isInside(t2.x1(), t2.y1()) ||
-          t1.isInside(t2.x2(), t2.y2())
-      }
-    }
-
-    def shouldCut(edge: Edge) = {
-      cutterTree.search(
-        edge.line,
-        cutterIntersectsLine
-      ).toBlocking.toIterable
-        .exists(c => !edge.cutters.contains(c))
-    }
-
-    def removeCut(edges: Seq[Edge]) : (Seq[Edge], Seq[Edge]) = {
-      val (_, left) = edges.span({ edge =>
-        shouldCut(edge)
-      })
-      left.span({ edge =>
-        !shouldCut(edge)
-      })
-    }
-
-    Stream.iterate((Seq.empty[Edge], refinedEdges))(a => removeCut(a._2))
-      .drop(1)
-      .map(_._1)
-      .takeWhile(_.nonEmpty)
-      .toList
-      .foreach(drawEdges)
-
-  }
 }

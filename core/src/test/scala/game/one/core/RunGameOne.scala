@@ -37,15 +37,17 @@ object RunGameOne {
 //      )
 //    )
 
-    val level = SplineTunnelPlatform.provider(
-      SplineTunnelPlatform.Params(
-        2,
-        100,
-        SingleWheel.wheelRadius * 100,
-        SingleWheel.wheelRadius * 30,
-        SingleWheel.wheelRadius * 2
-      )
-    )
+    val level = SplineTunnelPlatform.test
+
+//    val level = SplineTunnelPlatform.provider(
+//      SplineTunnelPlatform.Params(
+//        2,
+//        100,
+//        SingleWheel.wheelRadius * 100,
+//        SingleWheel.wheelRadius * 30,
+//        SingleWheel.wheelRadius * 2
+//      )
+//    )
 
     val screenWidth = 10
 
