@@ -28,5 +28,16 @@
             <artifactId>gdx-platform</artifactId>
             <classifier>natives-desktop</classifier>
         </dependency>
+        <dependency>
+            <groupId>com.github.davidmoten</groupId>
+            <artifactId>rtree</artifactId>
+            <version>0.7.5</version>
+        </dependency>
+        <dependency>
+            <groupId>com.vividsolutions</groupId>
+            <artifactId>jts-core</artifactId>
+            <version>1.14.0</version>
+        </dependency>
+
     </dependencies>
 </project>
