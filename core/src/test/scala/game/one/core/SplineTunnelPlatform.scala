@@ -110,7 +110,7 @@ object SplineTunnelPlatform {
 
       val lines =
         (ps :+ ps.head)
-          .sliding(2)
+          .sliding(2).map(_.toSeq)
           .collect({
             case Seq(p1, p2) =>
               Line.create(p1.x, p1.y, p2.x, p2.y)
@@ -189,10 +189,13 @@ object SplineTunnelPlatform {
       }
     }
 
-    def processPoints(points: Seq[Vector2])
+    def processPoints(points: Seq[Vector2]) = {
+      draw(nonSelfIntersectingSegments(points))
+    }
 
-    Platforms.loop(world, filter(points1)(identity).toArray)
-    Platforms.loop(world, filter(points2)(identity).toArray)
+    processPoints(points1)
+    processPoints(points2)
+
 
 
 
