@@ -11,6 +11,7 @@ import game.one.core.SplineTunnelPlatform.Params
 import rx.functions.Func2
 
 import scala.collection.JavaConversions._
+import scala.collection.immutable._
 
 /**
   * Created by martonpapp on 23/07/16.
@@ -43,8 +44,9 @@ object SplineTunnelPlatform {
         new Vector2(-1, 0),
         new Vector2(1, 0),
         new Vector2(0, 1)
-      ).map(v => (v.add(start.origin), 0.2f)),
-      _ => 1f,
+      ).map(v => (v.add(start.origin), 0f)),
+      _ => 0.2f,
+      _ => 0.2f,
       edgeDrawer(world)
     )
   }
@@ -52,47 +54,74 @@ object SplineTunnelPlatform {
 
   // TODO: different cutter for each side
   class Cutter(
-    line: Line,
-    d: Float
+    val polygon: Polygon
   ) extends Geometry {
 
-    val rectangle = Rectangle.create(
-      Math.min(
-        line.x1(),
-        line.x2()
-      ) - d,
-      Math.min(
-        line.y1(),
-        line.y2()
-      ) - d,
-      Math.max(
-        line.x1(),
-        line.x2()
-      ) + d,
-      Math.max(
-        line.y1(),
-        line.y2()
-      ) + d
-    )
+//    val rectangle = Rectangle.create(
+//      Math.min(
+//        line.x1(),
+//        line.x2()
+//      ) - d,
+//      Math.min(
+//        line.y1(),
+//        line.y2()
+//      ) - d,
+//      Math.max(
+//        line.x1(),
+//        line.x2()
+//      ) + d,
+//      Math.max(
+//        line.y1(),
+//        line.y2()
+//      ) + d
+//    )
+
+//    def isInside(x: Float, y: Float) : Boolean = {
+//      Line2D.ptSegDistSq(
+//        line.x1(),
+//        line.y1(),
+//        line.x2(),
+//        line.y2(),
+//        x,
+//        y
+//      ) < d*d
+//    }
 
     def isInside(x: Float, y: Float) : Boolean = {
-      Line2D.ptSegDistSq(
-        line.x1(),
-        line.y1(),
-        line.x2(),
-        line.y2(),
-        x,
-        y
-      ) < d*d
+      polygon.contains(x, y)
     }
 
     override def distance(r: Rectangle): Double = ???
 
     override def intersects(r: Rectangle): Boolean = {
-      (line.distance(r) < d).asInstanceOf[Boolean]
+      val rp = new Polygon(
+        Array(
+          r.x1(), r.y1(),
+          r.x2(), r.y1(),
+          r.x2(), r.y2(),
+          r.x1(), r.y2()
+        )
+      )
+      Intersector.overlapConvexPolygons(
+        polygon,
+        rp
+      )
+//      (line.distance(r) < d).asInstanceOf[Boolean]
     }
 
-    override def mbr(): Rectangle = rectangle
+    val br = {
+      val br = polygon.getBoundingRectangle
+      Rectangle.create(
+        br.x,
+        br.y,
+        br.x + br.width,
+        br.y + br.height
+      )
+    }
+
+    override def mbr(): Rectangle = {
+      br
+    }
   }
 
   class Vertex(
@@ -111,7 +140,7 @@ object SplineTunnelPlatform {
     p2: Vertex
   ) {
     def line = Line.create(p1.v.x, p1.v.y, p2.v.x, p2.v.y)
-    def cutters = p1.cutters intersect p2.cutters
+    val cutters = p1.cutters intersect p2.cutters
   }
 
 
@@ -120,7 +149,12 @@ object SplineTunnelPlatform {
     edges: Seq[Edge]
   )
 
-  def performCut(points: Seq[(Vector2, Float)], dist: Float => Float, drawEdges: Seq[Edge] => Unit) = {
+  def performCut(
+    points: Seq[(Vector2, Float)],
+    dist1: Float => Float,
+    dist2: Float => Float,
+    drawEdges: Seq[Edge] => Unit
+  ) = {
 
     val (sc1, sc2) =
       (points :+ points.head)
@@ -134,26 +168,51 @@ object SplineTunnelPlatform {
                 .rotate90(1)
 
             val ml = Line.create(p1.x, p1.y, p2.x, p2.y)
-            val d = dist(t)
-            val cutter = new Cutter(ml, d)
+
+            val d1 = dist1(t)
+            val e1p1 = new Vector2(p1).mulAdd(n, d1)
+            val e1p2 = new Vector2(p2).mulAdd(n, d1)
+
+            val pol1 = new Polygon(
+              Array(
+                p1.x, p1.y,
+                p2.x, p2.y,
+                e1p2.x, e1p2.y,
+                e1p1.x, e1p1.y
+              )
+            )
+            val c1 = new Cutter(pol1)
+
+            val d2 = dist2(t)
+            val e2p1 = new Vector2(p1).mulAdd(n, -d2)
+            val e2p2 = new Vector2(p2).mulAdd(n, -d2)
+
+            val pol2 = new Polygon(
+              Array(
+                p1.x, p1.y,
+                p2.x, p2.y,
+                e2p2.x, e2p2.y,
+                e2p1.x, e2p1.y
+              ).grouped(2).toSeq.reverse.flatten.toArray
+            )
+            val c2 = new Cutter(pol2)
 
             (
               (
-                cutter,
+                c1,
                 Edge(
-                  Vertex(new Vector2(p1).mulAdd(n, d), cutter),
-                  Vertex(new Vector2(p2).mulAdd(n, d), cutter)
+                  Vertex(e1p1, c1),
+                  Vertex(e1p2, c1)
                 )
-                ),
+              ),
               (
-                cutter,
+                c2,
                 Edge(
-                  Vertex(new Vector2(p1).mulAdd(n, -d), cutter),
-                  Vertex(new Vector2(p2).mulAdd(n, -d), cutter)
-                )
+                  Vertex(e2p1, c2),
+                  Vertex(e2p2, c2)
                 )
               )
-
+            )
         })
         .toSeq
         .unzip
@@ -162,26 +221,41 @@ object SplineTunnelPlatform {
     val (c2s, e2s) = sc2.unzip
 
     val halves = Seq(
-      Half(c1s.toList, e1s.toList),
+//      Half(c1s.toList, e1s.toList)
       Half(c2s.toList, e2s.toList)
     )
 
     halves.foreach { half =>
       import half._
 
+      val connectedEdges =
+        (edges :+ edges.head)
+          .sliding(2)
+          .collect({
+            case Seq(e1, e2) =>
+              Seq(
+                e1,
+                Edge(
+                  e1.p2,
+                  e2.p1
+                )
+              )
+          })
+          .flatten
+          .toList
 
       val edgeTree =
         RTree
           .create[Edge, Line]()
           .add(
             asJavaIterable(
-              edges.map({ edge =>
+              connectedEdges.map({ edge =>
                 Entry.entry(edge, edge.line)
               })
             )
           )
 
-      val refinedEdges = edges.flatMap({ edge =>
+      val refinedEdges = connectedEdges.flatMap({ edge =>
         val edgeCuts = edge.cutters
 
         val realCutters = edgeTree.search(edge.line).toBlocking.toIterable
@@ -240,8 +314,8 @@ object SplineTunnelPlatform {
           cutEdges :+ Edge(lastVertex, edge.p2)
         }
 
-
       })
+      .to[Seq]
 
       val cutterTree =
         RTree
@@ -266,7 +340,9 @@ object SplineTunnelPlatform {
           edge.line,
           cutterIntersectsLine
         ).toBlocking.toIterable
-          .exists(c => !edge.cutters.contains(c))
+          .exists({ c =>
+            !edge.cutters.contains(c.value)
+          })
       }
 
       def removeCut(edges: Seq[Edge]) : (Seq[Edge], Seq[Edge]) = {
@@ -278,14 +354,18 @@ object SplineTunnelPlatform {
         })
       }
 
-//      Stream.iterate((Seq.empty[Edge], refinedEdges))(a => removeCut(a._2))
-//        .drop(1)
-//        .map(_._1)
-//        .takeWhile(_.nonEmpty)
-//        .toList
-//        .foreach(drawEdges)
+      def cutStream(edges: Seq[Edge]) : Stream[Seq[Edge]] = {
+        if (edges.isEmpty) Stream.empty[Seq[Edge]]
+        else {
+          val (keep, left) = removeCut(edges)
+          Stream.cons(keep, cutStream(left))
+        }
+      }
 
-      drawEdges(refinedEdges)
+      cutStream(refinedEdges)
+        .foreach(drawEdges)
+
+//      drawEdges(refinedEdges)
     }
   }
 
@@ -323,8 +403,8 @@ object SplineTunnelPlatform {
     }
 
     def drawEdges(edges: Seq[Edge]) = {
-      edges.headOption.foreach { head =>
-        drawVertices(head.p1 +: edges.tail.map(_.p2))
+      if (edges.nonEmpty) {
+        drawVertices(edges.head.p1 +: edges.map(_.p2))
       }
     }
 
@@ -367,6 +447,6 @@ class SplineLevel(params: Params, world: World, start: Start) {
       (v, t)
     })
 
-  performCut(points, dist, edgeDrawer(world))
+  performCut(points, dist, dist, edgeDrawer(world))
 
 }
