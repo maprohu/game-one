@@ -39,7 +39,7 @@ object RunGameOne {
 
     val level = SplineTunnelPlatform.provider(
       SplineTunnelPlatform.Params(
-        4,
+        2,
         100,
         SingleWheel.wheelRadius * 100,
         SingleWheel.wheelRadius * 30,

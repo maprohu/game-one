@@ -1,9 +1,13 @@
 package game.one.core
 
+import java.awt.geom.Line2D
+
 import com.badlogic.gdx.math._
 import com.github.davidmoten.rtree.{Entry, RTree}
-import com.github.davidmoten.rtree.geometry.Line
+import com.github.davidmoten.rtree.geometry.{Line, Point}
 import game.one.core.GameOne.Level
+import rx.functions.Func2
+
 import scala.collection.JavaConversions._
 
 /**
@@ -41,10 +45,21 @@ object SplineTunnelPlatform {
       true
     )
 
+    trait Cutter
 
     def dist(t: Float) = thickness
 //    def dist2(t: Float) = thickness
 
+    class Vertex(
+      val v: Vector2,
+      val cutters: Set[Cutter] = Set()
+    ) {
+      def point = Point.create(v.x, v.y)
+    }
+    object Vertex {
+      def apply(p: Vector2): Vertex = new Vertex(p)
+      def apply(p: Vector2, cutter: Cutter): Vertex = new Vertex(p, Set(cutter))
+    }
 
     val points = Range(0, segmentCount)
       .map(_.toFloat / segmentCount)
@@ -54,15 +69,24 @@ object SplineTunnelPlatform {
         (v, t)
       })
 
+    case class Edge(
+      p1: Vertex,
+      p2: Vertex
+    ) {
+      def line = Line.create(p1.v.x, p1.v.y, p2.v.x, p2.v.y)
+    }
+
     case class E1(
       mp1: Vector2,
       mp2: Vector2,
       d: Float,
-      e1p1: Vector2,
-      e1p2: Vector2,
-      e2p1: Vector2,
-      e2p2: Vector2
-    )
+      e1p1: Vertex,
+      e1p2: Vertex,
+      e2p1: Vertex,
+      e2p2: Vertex
+    ) {
+      def middleEdge = Edge(Vertex(mp1), Vertex(mp2))
+    }
 
     val e1s =
       (points :+ points.head)
@@ -76,23 +100,22 @@ object SplineTunnelPlatform {
                 .rotate90(1)
 
             val d = dist(t)
+            val c1 = new Cutter {}
+            val c2 = new Cutter {}
 
             E1(
               p1,
               p2,
               d,
-              new Vector2(p1).mulAdd(n, d),
-              new Vector2(p2).mulAdd(n, d),
-              new Vector2(p1).mulAdd(n, -d),
-              new Vector2(p2).mulAdd(n, -d)
+              Vertex(new Vector2(p1).mulAdd(n, d), c1),
+              Vertex(new Vector2(p2).mulAdd(n, d), c1),
+              Vertex(new Vector2(p1).mulAdd(n, -d), c2),
+              Vertex(new Vector2(p2).mulAdd(n, -d), c2)
             )
         })
         .toSeq
 
-    case class Edge(
-      p1: Vector2,
-      p2: Vector2
-    )
+
     val (points1, points2) =
       (e1s :+ e1s.head)
         .flatMap({ i =>
@@ -104,54 +127,130 @@ object SplineTunnelPlatform {
         })
         .unzip
 
-    def nonSelfIntersectingSegments(ps: Seq[Vector2]) : Seq[Seq[Vector2]] = {
-
-      type Data = Line
+    def nonSelfIntersectingSegments(ps: Seq[Vertex]) : Seq[Seq[Vertex]] = {
 
       val lines =
-        (ps :+ ps.head)
-          .sliding(2).map(_.toSeq)
+        ps
+          .sliding(2)
           .collect({
             case Seq(p1, p2) =>
-              Line.create(p1.x, p1.y, p2.x, p2.y)
-          })
+              Edge(
+                p1, p2
+              )
+          }).toIterable
+
 
       val tree =
         RTree
-          .create[Data, Line]()
+          .create[Edge, Line]()
           .add(
             asJavaIterable(
-              lines.map({ line =>
-                Entry.entry(line, line)
-              }).toIterable
+              lines.map({ edge =>
+                Entry.entry(edge, edge.line)
+              })
             )
           )
 
-      def selfIntersects(line: Line) : Boolean = {
-        tree.search(line).toBlocking.toIterable
+      val pointTree =
+        RTree
+          .create[Vertex, Point]()
+          .add(
+            asJavaIterable(
+              lines.flatMap({ edge =>
+                Seq(
+                  Entry.entry(edge.p1, edge.p1.point),
+                  Entry.entry(edge.p2, edge.p2.point)
+                )
+              })
+            )
+          )
+
+      def selfIntersects(line: Edge) : Boolean = {
+        tree.search(line.line).toBlocking.toIterable
           .filterNot({ entry =>
-            entry.value() eq line
+            val found = entry.value()
+
+            (found.p1 eq line.p1) ||
+            (found.p1 eq line.p2) ||
+            (found.p2 eq line.p1) ||
+            (found.p2 eq line.p2)
           })
           .nonEmpty
       }
+
+      val lineDistance : Func2[Line, Line, java.lang.Double] = new Func2[Line, Line, java.lang.Double] {
+        override def call(t1: Line, t2: Line): Double = {
+          if (t1.intersects(t2)) 0
+          else {
+            Math.sqrt(
+              Seq(
+                Line2D.ptSegDistSq(
+                  t1.x1(), t1.y1(),
+                  t1.x2(), t1.y2(),
+                  t2.x1(), t2.y1()
+                ),
+                Line2D.ptSegDistSq(
+                  t1.x1(), t1.y1(),
+                  t1.x2(), t1.y2(),
+                  t2.x2(), t2.y2()
+                ),
+                Line2D.ptSegDistSq(
+                  t2.x1(), t2.y1(),
+                  t2.x2(), t2.y2(),
+                  t1.x1(), t1.y1()
+                ),
+                Line2D.ptSegDistSq(
+                  t2.x1(), t2.y1(),
+                  t2.x2(), t2.y2(),
+                  t1.x2(), t1.y2()
+                )
+              ).reduce((a,b) => Math.min(a,b))
+            )
+          }
+        }
+      }
+
+      val pointLineDistance : Func2[Point, Line, java.lang.Double] = new Func2[Point, Line, java.lang.Double] {
+        override def call(t1: Point, t2: Line): Double = {
+          Line2D.ptLineDist(t2.x1(), t2.y1(), t2.x2(), t2.y2(), t1.x(), t1.y())
+        }
+      }
+
+      val innerPoints =
+        e1s.foldLeft(Set.empty[Vertex])({ (ps, e) =>
+          val line = e.middleEdge.line
+
+          ps ++
+            pointTree.search(
+              line,
+              e.d.toDouble,
+              pointLineDistance
+            ).toBlocking.toIterable
+              .filterNot({ entry =>
+
+                val found = entry.value()
+
+                (found eq e.e1p1) ||
+                  (found eq e.e1p2) ||
+                  (found eq e.e2p1) ||
+                  (found eq e.e2p2)
+              })
+              .map(_.value())
+        })
 
       val (nonIntersect, headIntersect) = lines.span({ line =>
         !selfIntersects(line)
       })
 
       val reorg =
-        (headIntersect ++ nonIntersect).toIterable.tail
+        (headIntersect ++ nonIntersect).tail
 
-      reorg.foldLeft(Seq(Seq(new Vector2(
-        reorg.head.x1(),
-        reorg.head.y1()
-      ))))({ (segs, line) =>
-        val p = new Vector2(line.x2(), line.y2())
+      val segs = reorg.foldLeft(Seq(Seq(reorg.head.p1)))({ (segs, line) =>
 
         if (selfIntersects(line)) {
-          Seq(p) +: segs
+          Seq(line.p2) +: segs
         } else {
-          (p +: segs.head) +: segs.tail
+          (line.p2 +: segs.head) +: segs.tail
         }
 
       })
