@@ -37,12 +37,13 @@ object RunGameOne {
 //      )
 //    )
 
-    val level = SplinePlatform.provider(
-      SplinePlatform.Params(
-        7,
+    val level = SplineTunnelPlatform.provider(
+      SplineTunnelPlatform.Params(
+        4,
         100,
-        SingleWheel.wheelRadius * 50,
-        SingleWheel.wheelRadius * 50
+        SingleWheel.wheelRadius * 100,
+        SingleWheel.wheelRadius * 30,
+        SingleWheel.wheelRadius * 2
       )
     )
 
@@ -150,7 +151,6 @@ class PlayerLevelLogic(
   def resize(width: Int, height: Int): Unit = {
     val heightMeters = (height * screenWidth) / width
     camera.setToOrtho(false, screenWidth, heightMeters)
-//    camera.translate(-screenWidth / 2, -heightMeters / 2)
     camera.position.set(playerBody.getPosition, 0)
     camera.update()
   }

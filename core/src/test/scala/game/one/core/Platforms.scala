@@ -22,4 +22,18 @@ object Platforms {
     shape.dispose()
   }
 
+  def loop(world: World, points: Array[Vector2]) = {
+    val groundBodyDef = new BodyDef()
+
+    val groundBody = world.createBody(groundBodyDef)
+
+    val shape = new ChainShape()
+
+
+    shape.createLoop(points)
+
+    groundBody.createFixture(shape, 0.0f)
+    shape.dispose()
+  }
+
 }
