@@ -4,7 +4,7 @@ import java.awt.geom.Line2D
 
 import com.badlogic.gdx.math._
 import com.github.davidmoten.rtree.{Entry, RTree}
-import com.github.davidmoten.rtree.geometry.{Line, Point}
+import com.github.davidmoten.rtree.geometry.{Geometry, Line, Point, Rectangle}
 import game.one.core.GameOne.Level
 import rx.functions.Func2
 
@@ -45,7 +45,50 @@ object SplineTunnelPlatform {
       true
     )
 
-    trait Cutter
+    // TODO: different cutter for each side
+    class Cutter(
+      line: Line,
+      d: Float
+    ) extends Geometry {
+
+      val rectangle = Rectangle.create(
+        Math.min(
+          line.x1(),
+          line.x2()
+        ) - d,
+        Math.min(
+          line.y1(),
+          line.y2()
+        ) - d,
+        Math.max(
+          line.x1(),
+          line.x2()
+        ) + d,
+        Math.max(
+          line.y1(),
+          line.y2()
+        ) + d
+      )
+
+      def isInside(point: Point) : Boolean = {
+        Line2D.ptSegDistSq(
+          line.x1(),
+          line.y1(),
+          line.x2(),
+          line.y2(),
+          point.x(),
+          point.y()
+        ) < d*d
+      }
+
+      override def distance(r: Rectangle): Double = ???
+
+      override def intersects(r: Rectangle): Boolean = {
+        line.distance(r) < d
+      }
+
+      override def mbr(): Rectangle = rectangle
+    }
 
     def dist(t: Float) = thickness
 //    def dist2(t: Float) = thickness
@@ -88,7 +131,12 @@ object SplineTunnelPlatform {
       def middleEdge = Edge(Vertex(mp1), Vertex(mp2))
     }
 
-    val e1s =
+    case class Half(
+      cutters: Seq[Cutter],
+      edges: Seq[Edge]
+    )
+
+    val (sc1, sc2) =
       (points :+ points.head)
         .sliding(2)
         .collect({
@@ -99,21 +147,84 @@ object SplineTunnelPlatform {
                 .nor()
                 .rotate90(1)
 
+            val ml = Line.create(p1.x, p1.y, p2.x, p2.y)
             val d = dist(t)
-            val c1 = new Cutter {}
-            val c2 = new Cutter {}
+            val cutter = new Cutter(ml, d)
 
-            E1(
-              p1,
-              p2,
-              d,
-              Vertex(new Vector2(p1).mulAdd(n, d), c1),
-              Vertex(new Vector2(p2).mulAdd(n, d), c1),
-              Vertex(new Vector2(p1).mulAdd(n, -d), c2),
-              Vertex(new Vector2(p2).mulAdd(n, -d), c2)
+            (
+              (
+                cutter,
+                Edge(
+                  Vertex(new Vector2(p1).mulAdd(n, d), cutter),
+                  Vertex(new Vector2(p2).mulAdd(n, d), cutter)
+                ),
+              ),
+              (
+                cutter,
+                Edge(
+                  Vertex(new Vector2(p1).mulAdd(n, -d), cutter),
+                  Vertex(new Vector2(p2).mulAdd(n, -d), cutter)
+                )
+              )
             )
+
         })
         .toSeq
+        .unzip
+
+    val (c1s, e1s) = sc1.unzip
+    val (c2s, e2s) = sc2.unzip
+
+    val halves = Seq(
+      Half(c1s, e1s),
+      Half(c2s, e2s)
+    )
+
+    halves.foreach { half =>
+      import half._
+
+
+      val edgeTree =
+        RTree
+          .create[Edge, Line]()
+          .add(
+            asJavaIterable(
+              edges.map({ edge =>
+                Entry.entry(edge, edge.line)
+              })
+            )
+          )
+
+
+      edges.flatMap({ edge =>
+        val cuttingEdges = edgeTree.search(edge.line).toBlocking.toIterable
+          .filterNot({ entry =>
+            val found = entry.value()
+
+            (found eq edge) ||
+              (found.p1 eq edge.p2) ||
+              (found.p2 eq edge.p1)
+          })
+
+        
+
+      })
+
+
+
+      val cutterTree =
+        RTree
+          .create[Cutter, Cutter]()
+          .add(
+            asJavaIterable(
+              cutters.map({ cutter =>
+                Entry.entry(cutter, cutter)
+              })
+            )
+          )
+
+
+    }
 
 
     val (points1, points2) =
