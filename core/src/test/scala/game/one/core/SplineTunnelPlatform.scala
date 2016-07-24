@@ -93,19 +93,30 @@ object SplineTunnelPlatform {
 
     override def distance(r: Rectangle): Double = ???
 
+    val bb = polygon.getBoundingRectangle
+
     override def intersects(r: Rectangle): Boolean = {
-      val rp = new Polygon(
-        Array(
-          r.x1(), r.y1(),
-          r.x2(), r.y1(),
-          r.x2(), r.y2(),
-          r.x1(), r.y2()
-        )
+      val rr = new com.badlogic.gdx.math.Rectangle(
+        r.x1(),
+        r.y1(),
+        r.x2() - r.x1(),
+        r.y2() - r.y1()
       )
-      Intersector.overlapConvexPolygons(
-        polygon,
-        rp
+      bb.overlaps(
+        rr
       )
+//      val rp = new Polygon(
+//        Array(
+//          r.x1(), r.y1(),
+//          r.x2(), r.y1(),
+//          r.x2(), r.y2(),
+//          r.x1(), r.y2()
+//        )
+//      )
+//      Intersector.overlapConvexPolygons(
+//        polygon,
+//        rp
+//      )
 //      (line.distance(r) < d).asInstanceOf[Boolean]
     }
 
@@ -144,10 +155,6 @@ object SplineTunnelPlatform {
   }
 
 
-  case class Half(
-    cutters: Seq[Cutter],
-    edges: Seq[Edge]
-  )
 
   def performCut(
     points: Seq[(Vector2, Float)],
@@ -220,14 +227,10 @@ object SplineTunnelPlatform {
     val (c1s, e1s) = sc1.unzip
     val (c2s, e2s) = sc2.unzip
 
-    val halves = Seq(
-//      Half(c1s.toList, e1s.toList)
-      Half(c2s.toList, e2s.toList)
-    )
-
-    halves.foreach { half =>
-      import half._
-
+    case class Half(
+      cutters: Seq[Cutter],
+      edges: Seq[Edge]
+    ) {
       val connectedEdges =
         (edges :+ edges.head)
           .sliding(2)
@@ -243,17 +246,41 @@ object SplineTunnelPlatform {
           })
           .flatten
           .toList
+    }
 
-      val edgeTree =
-        RTree
-          .create[Edge, Line]()
-          .add(
-            asJavaIterable(
-              connectedEdges.map({ edge =>
-                Entry.entry(edge, edge.line)
-              })
-            )
+    val halves = Seq(
+      Half(c1s.toList, e1s.toList),
+      Half(c2s.toList, e2s.toList)
+    )
+
+    val allCutters = halves.flatMap(_.cutters)
+
+    val cutterTree =
+      RTree
+        .create[Cutter, Cutter]()
+        .add(
+          asJavaIterable(
+            allCutters.map({ cutter =>
+              Entry.entry(cutter, cutter)
+            })
           )
+        )
+
+    val edgeTree =
+      RTree
+        .create[Edge, Line]()
+        .add(
+          asJavaIterable(
+            halves.flatMap(_.connectedEdges).map({ edge =>
+              Entry.entry(edge, edge.line)
+            })
+          )
+        )
+
+    halves.foreach { half =>
+      import half._
+
+
 
       val refinedEdges = connectedEdges.flatMap({ edge =>
         val edgeCuts = edge.cutters
@@ -317,40 +344,32 @@ object SplineTunnelPlatform {
       })
       .to[Seq]
 
-      val cutterTree =
-        RTree
-          .create[Cutter, Cutter]()
-          .add(
-            asJavaIterable(
-              cutters.map({ cutter =>
-                Entry.entry(cutter, cutter)
-              })
-            )
-          )
-
-      val cutterIntersectsLine = new Func2[Cutter, Line, java.lang.Boolean] {
-        override def call(t1: Cutter, t2: Line): java.lang.Boolean = {
-          t1.isInside(t2.x1(), t2.y1()) ||
-            t1.isInside(t2.x2(), t2.y2())
+      val cutterIntersectsLine = new Func2[Cutter, Point, java.lang.Boolean] {
+        override def call(t1: Cutter, t2: Point): java.lang.Boolean = {
+          t1.isInside(t2.x(), t2.y())
         }
       }
 
-      def shouldCut(edge: Edge) = {
+      def shouldCutVertex(vertex: Vertex) : Boolean = {
         cutterTree.search(
-          edge.line,
+          vertex.point,
           cutterIntersectsLine
         ).toBlocking.toIterable
           .exists({ c =>
-            !edge.cutters.contains(c.value)
+            !vertex.cutters.contains(c.value)
           })
+      }
+
+      def shouldCutEdge(edge: Edge) : Boolean = {
+        shouldCutVertex(edge.p1) || shouldCutVertex(edge.p2)
       }
 
       def removeCut(edges: Seq[Edge]) : (Seq[Edge], Seq[Edge]) = {
         val (_, left) = edges.span({ edge =>
-          shouldCut(edge)
+          shouldCutEdge(edge)
         })
         left.span({ edge =>
-          !shouldCut(edge)
+          !shouldCutEdge(edge)
         })
       }
 
