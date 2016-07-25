@@ -1,6 +1,6 @@
 package game.one.core
 
-import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.{Gdx, InputAdapter, InputProcessor}
 import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.graphics.{GL20, OrthographicCamera}
 import com.badlogic.gdx.math.Vector2
@@ -75,6 +75,23 @@ class SingleWheel(world: World) extends Player {
   val jump = new Vector2(0, jumpImpulse)
   val gravity = new Vector2(0, -10)
 
+  Gdx.input.setInputProcessor(new InputAdapter {
+    override def keyDown(keycode: Int): Boolean = {
+      keycode match {
+        case Keys.UP =>
+          wheel.applyLinearImpulse(
+            jump,
+            wheel.getWorldCenter,
+            true
+          )
+          true
+        case _ =>
+          false
+      }
+
+    }
+  })
+
   override def step: Unit = {
     if (
       Gdx.input.isKeyPressed(Keys.LEFT)
@@ -94,18 +111,18 @@ class SingleWheel(world: World) extends Player {
 //      wheel.applyAngularImpulse(-angularImpulse, true)
     }
 
-    if (
-      Gdx.input.isKeyJustPressed(Keys.UP)
-    ) {
-      wheel.applyLinearImpulse(
-        jump,
-        wheel.getWorldCenter,
-        true
-      )
-
-//      gravity.scl(-1)
-//      world.setGravity(gravity)
-    }
+//    if (
+//      Gdx.input.isKeyJustPressed(Keys.UP)
+//    ) {
+//      wheel.applyLinearImpulse(
+//        jump,
+//        wheel.getWorldCenter,
+//        true
+//      )
+//
+////      gravity.scl(-1)
+////      world.setGravity(gravity)
+//    }
   }
 
 }
