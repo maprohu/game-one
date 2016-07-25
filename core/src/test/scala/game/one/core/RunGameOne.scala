@@ -41,15 +41,15 @@ object RunGameOne {
 
     val level = SplineTunnelPlatform.provider(
       SplineTunnelPlatform.Params(
-        4,
-        50,
+        5,
+        100,
+        SingleWheel.wheelRadius * 200,
         SingleWheel.wheelRadius * 100,
-        SingleWheel.wheelRadius * 30,
-        SingleWheel.wheelRadius * 2
+        SingleWheel.wheelRadius * 3
       )
     )
 
-    val screenWidth = 10
+    val screenWidth = 15
 
     { () =>
       new PlayerLevelLogic(
@@ -130,7 +130,7 @@ class PlayerLevelLogic(
           world.step(frameRate, 6, 2)
           world.clearForces()
           playerPosition3.set(playerBody.getPosition, 0)
-          camera.position.lerp(playerPosition3, 0.1f)
+          camera.position.lerp(playerPosition3, 0.2f)
           camera.update(false)
         }
       },

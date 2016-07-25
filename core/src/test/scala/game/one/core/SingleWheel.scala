@@ -20,10 +20,11 @@ object SingleWheel {
   val wheelRadius = 0.1f
   val wheelOrigin = new Vector2(0, 0)
 
-  val maxAngularVelocity = 30
+  val maxAngularVelocity = 100
   val wheelDensity = 1
   val angularImpulse = 0.1f * wheelDensity
-  val wheelFriction = 10f
+  val wheelFriction = 20f
+  val jumpImpulse = wheelDensity * 0.08f
 
   val provider : PlayerProvider = world => {
     val player = new SingleWheel(world)
@@ -70,6 +71,10 @@ class SingleWheel(world: World) extends Player {
   }
 
 
+  val center = new Vector2(0, 0)
+  val jump = new Vector2(0, jumpImpulse)
+  val gravity = new Vector2(0, -10)
+
   override def step: Unit = {
     if (
       Gdx.input.isKeyPressed(Keys.LEFT)
@@ -87,6 +92,19 @@ class SingleWheel(world: World) extends Player {
     ) {
       wheel.applyTorque(-angularImpulse, true)
 //      wheel.applyAngularImpulse(-angularImpulse, true)
+    }
+
+    if (
+      Gdx.input.isKeyJustPressed(Keys.UP)
+    ) {
+      wheel.applyLinearImpulse(
+        jump,
+        wheel.getWorldCenter,
+        true
+      )
+
+//      gravity.scl(-1)
+//      world.setGravity(gravity)
     }
   }
 
