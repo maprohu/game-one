@@ -45,7 +45,7 @@ object RunGameOne {
         500,
         SingleWheel.wheelRadius * 200,
         SingleWheel.wheelRadius * 100,
-        SingleWheel.wheelRadius * 3f
+        SingleWheel.wheelRadius * 4f
       )
     )
 
