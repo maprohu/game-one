@@ -7,11 +7,6 @@ import com.badlogic.gdx.backends.lwjgl.LwjglApplication
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType
 import com.badlogic.gdx.graphics.{Color, GL20, OrthographicCamera}
-import com.badlogic.gdx.math.{Matrix4, Vector2, Vector3}
-import com.badlogic.gdx.physics.box2d._
-import com.badlogic.gdx.utils.Timer
-import com.badlogic.gdx.utils.Timer.Task
-import game.one.core.RandomLinePlatform.Params
 
 
 object RunAudio {
@@ -114,7 +109,7 @@ class AudioLogic(
   val ColumnWidth = 2.0f / BufferSize
 
   val sr = new ShapeRenderer()
-  
+
   def render = {
     Gdx.gl.glClearColor( 0, 0, 1, 1 )
     Gdx.gl.glClear( GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT )
