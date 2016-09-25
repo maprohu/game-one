@@ -113,12 +113,13 @@ class AudioLogic(
 
   val ColumnWidth = 2.0f / BufferSize
 
+  val sr = new ShapeRenderer()
+  
   def render = {
     Gdx.gl.glClearColor( 0, 0, 1, 1 )
     Gdx.gl.glClear( GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT )
 
 
-    val sr = new ShapeRenderer()
     sr.setColor(Color.WHITE)
     sr.setProjectionMatrix(camera.combined)
 
